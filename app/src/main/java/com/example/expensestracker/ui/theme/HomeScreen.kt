@@ -1,12 +1,32 @@
+// HomeScreen.kt
 package com.example.expensestracker.ui.theme
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -15,19 +35,18 @@ import androidx.compose.ui.unit.sp
 import com.example.expensestracker.model.Expense
 import com.example.expensestracker.model.ExpenseSheet
 import com.example.expensestracker.model.monthName
+import kotlin.math.abs
 
-// ---------------- SHEET LIST ----------------
 @Composable
 fun SheetList(
     sheets: List<ExpenseSheet>,
     onSheetClick: (ExpenseSheet) -> Unit,
     onAddNewSheet: () -> Unit,
+    onOpenGraph: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = onAddNewSheet) { Text("+") }
-        }
+        floatingActionButton = { FloatingActionButton(onClick = onAddNewSheet) { Text("+") } }
     ) { pad ->
         Column(
             modifier = modifier
@@ -35,7 +54,15 @@ fun SheetList(
                 .padding(pad)
                 .padding(12.dp)
         ) {
-            Text("Expense Sheets", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Expense Sheets", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = onOpenGraph) { Text("Graph") }
+            }
+
             Spacer(Modifier.height(12.dp))
 
             if (sheets.isEmpty()) {
@@ -69,7 +96,6 @@ fun SheetList(
     }
 }
 
-// -------------- NEW SHEET DIALOG --------------
 @Composable
 fun AddSheetDialog(
     onCancel: () -> Unit,
@@ -102,7 +128,6 @@ fun AddSheetDialog(
     )
 }
 
-// -------------- SHEET DETAILS ----------------
 @Composable
 fun SheetDetails(
     sheet: ExpenseSheet,
@@ -116,9 +141,7 @@ fun SheetDetails(
     val remaining = sheet.income - total
 
     Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddExpense = true }) { Text("+") }
-        }
+        floatingActionButton = { FloatingActionButton(onClick = { showAddExpense = true }) { Text("+") } }
     ) { pad ->
         Column(
             modifier = modifier
@@ -127,16 +150,18 @@ fun SheetDetails(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // simple header with back action
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onBack) { Text("Back") }
-                Text("Expenses • ${monthName(sheet.month)} ${sheet.year}",
-                    fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.width(48.dp))
+                Text(
+                    "Expenses • ${monthName(sheet.month)} ${sheet.year}",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(0.dp))
             }
 
             var incomeText by remember(sheet.id) { mutableStateOf(if (sheet.income == 0.0) "" else sheet.income.toString()) }
@@ -152,7 +177,7 @@ fun SheetDetails(
                 Text("Total Expenses: €%.2f".format(total))
                 Text(
                     if (remaining >= 0) "Remaining: €%.2f".format(remaining)
-                    else "Deficit: €%.2f".format(kotlin.math.abs(remaining)),
+                    else "Deficit: €%.2f".format(abs(remaining)),
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -161,7 +186,9 @@ fun SheetDetails(
                 items(expenses, key = { it.id }) { e ->
                     ElevatedCard(Modifier.fillMaxWidth()) {
                         Row(
-                            Modifier.fillMaxWidth().padding(16.dp),
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(e.title)
@@ -186,7 +213,6 @@ fun SheetDetails(
     }
 }
 
-// -------------- ADD EXPENSE DIALOG --------------
 @Composable
 fun AddExpenseDialog(
     onCancel: () -> Unit,
