@@ -3,32 +3,12 @@ package com.example.expensestracker.ui.theme
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -139,14 +119,13 @@ fun AddSheetDialog(
 @Composable
 fun SheetDetails(
     sheet: ExpenseSheet,
+    expenses: SnapshotStateList<Expense>,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val expenses = remember(sheet.id) { mutableStateListOf<Expense>() }
     var showAddExpense by remember { mutableStateOf(false) }
 
     val total = expenses.sumOf { it.amount }
-    sheet.totalExpense = total
     val remaining = sheet.income - total
 
     Scaffold(
@@ -170,13 +149,16 @@ fun SheetDetails(
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-                Spacer(Modifier.height(0.dp))
+                Spacer(Modifier.width(48.dp))
             }
 
             var incomeText by remember(sheet.id) { mutableStateOf(if (sheet.income == 0.0) "" else sheet.income.toString()) }
             OutlinedTextField(
                 value = incomeText,
-                onValueChange = { incomeText = it; sheet.income = it.toDoubleOrNull() ?: 0.0 },
+                onValueChange = {
+                    incomeText = it
+                    sheet.income = it.replace(',', '.').toDoubleOrNull() ?: 0.0
+                },
                 label = { Text("Monthly Income (€)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -195,9 +177,7 @@ fun SheetDetails(
                 items(expenses, key = { it.id }) { e ->
                     ElevatedCard(Modifier.fillMaxWidth()) {
                         Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                            Modifier.fillMaxWidth().padding(16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(e.title)
@@ -236,14 +216,14 @@ fun AddExpenseDialog(
         title = { Text("Add Expense") },
         text = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = title,   onValueChange = { title = it },  label = { Text("Title") },      singleLine = true)
-                OutlinedTextField(value = amount,  onValueChange = { amount = it }, label = { Text("Amount (€)") }, singleLine = true)
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
+                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount (€)") }, singleLine = true)
                 if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                val a = amount.toDoubleOrNull()
+                val a = amount.replace(',', '.').toDoubleOrNull()
                 if (title.isBlank()) { error = "Title required"; return@TextButton }
                 if (a == null || a <= 0) { error = "Enter amount > 0"; return@TextButton }
                 onConfirm(title.trim(), a)
@@ -254,11 +234,15 @@ fun AddExpenseDialog(
 }
 
 @Composable
-fun GraphScreen(sheets: List<ExpenseSheet>, onBack: () -> Unit) {
+fun GraphScreen(
+    sheets: List<ExpenseSheet>,
+    totalOf: (Long) -> Double,
+    onBack: () -> Unit
+) {
     val recent = sheets.sortedWith(compareBy({ it.year }, { it.month })).takeLast(4)
     val labels = recent.map { "${monthName(it.month).take(3)} ${it.year % 100}" }
     val incomes = recent.map { it.income }
-    val expenses = recent.map { it.totalExpense }
+    val expenses = recent.map { totalOf(it.id) }
 
     Scaffold { pad ->
         Column(
@@ -275,7 +259,7 @@ fun GraphScreen(sheets: List<ExpenseSheet>, onBack: () -> Unit) {
             ) {
                 TextButton(onClick = onBack) { Text("Back") }
                 Text("Income/Expenses", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(0.dp))
+                Spacer(Modifier.width(48.dp))
             }
 
             Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
@@ -317,21 +301,18 @@ fun GraphScreen(sheets: List<ExpenseSheet>, onBack: () -> Unit) {
                 }
             }
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 labels.forEach { Text(it) }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Canvas(Modifier.height(14.dp).fillMaxWidth(0f)) { drawRect(Color(0xFF1E88E5)) }
-                    Spacer(Modifier.height(0.dp)); Text("Income")
+                    Canvas(Modifier.size(14.dp)) { drawRect(Color(0xFF1E88E5)) }
+                    Spacer(Modifier.width(6.dp)); Text("Income")
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Canvas(Modifier.height(14.dp).fillMaxWidth(0f)) { drawRect(Color(0xFFE53935)) }
-                    Spacer(Modifier.height(0.dp)); Text("Expenses")
+                    Canvas(Modifier.size(14.dp)) { drawRect(Color(0xFFE53935)) }
+                    Spacer(Modifier.width(6.dp)); Text("Expenses")
                 }
             }
         }

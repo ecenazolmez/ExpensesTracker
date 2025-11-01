@@ -1,4 +1,4 @@
-
+// MainActivity.kt
 package com.example.expensestracker
 
 import android.os.Bundle
@@ -7,6 +7,9 @@ import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import com.example.expensestracker.model.Expense
 import com.example.expensestracker.model.ExpenseSheet
 import com.example.expensestracker.ui.theme.AddSheetDialog
 import com.example.expensestracker.ui.theme.GraphScreen
@@ -25,6 +28,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ExpenseApp() {
     val sheets = remember { mutableStateListOf<ExpenseSheet>() }
+    val expensesMap = remember { mutableStateMapOf<Long, SnapshotStateList<Expense>>() }
+
+    fun expensesOf(id: Long): SnapshotStateList<Expense> =
+        expensesMap.getOrPut(id) { mutableStateListOf() }
+
+    fun totalOf(id: Long): Double = expensesOf(id).sumOf { it.amount }
+
     var screen by remember { mutableStateOf(Screen.Sheets) }
     var selected by remember { mutableStateOf<ExpenseSheet?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
@@ -38,9 +48,17 @@ fun ExpenseApp() {
         )
         Screen.Details -> {
             val s = selected ?: return
-            SheetDetails(sheet = s, onBack = { screen = Screen.Sheets })
+            SheetDetails(
+                sheet = s,
+                expenses = expensesOf(s.id),
+                onBack = { screen = Screen.Sheets }
+            )
         }
-        Screen.Graph -> GraphScreen(sheets = sheets, onBack = { screen = Screen.Sheets })
+        Screen.Graph -> GraphScreen(
+            sheets = sheets,
+            totalOf = { id -> totalOf(id) },
+            onBack = { screen = Screen.Sheets }
+        )
     }
 
     if (showAddSheet) {
