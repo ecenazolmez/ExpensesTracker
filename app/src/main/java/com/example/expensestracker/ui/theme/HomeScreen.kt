@@ -1,12 +1,14 @@
 // HomeScreen.kt
 package com.example.expensestracker.ui.theme
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,6 +31,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,6 +43,7 @@ import com.example.expensestracker.model.Expense
 import com.example.expensestracker.model.ExpenseSheet
 import com.example.expensestracker.model.monthName
 import kotlin.math.abs
+import kotlin.math.ceil
 
 @Composable
 fun SheetList(
@@ -138,6 +146,7 @@ fun SheetDetails(
     var showAddExpense by remember { mutableStateOf(false) }
 
     val total = expenses.sumOf { it.amount }
+    sheet.totalExpense = total
     val remaining = sheet.income - total
 
     Scaffold(
@@ -242,4 +251,89 @@ fun AddExpenseDialog(
         },
         dismissButton = { TextButton(onCancel) { Text("Cancel") } }
     )
+}
+
+@Composable
+fun GraphScreen(sheets: List<ExpenseSheet>, onBack: () -> Unit) {
+    val recent = sheets.sortedWith(compareBy({ it.year }, { it.month })).takeLast(4)
+    val labels = recent.map { "${monthName(it.month).take(3)} ${it.year % 100}" }
+    val incomes = recent.map { it.income }
+    val expenses = recent.map { it.totalExpense }
+
+    Scaffold { pad ->
+        Column(
+            modifier = Modifier
+                .padding(pad)
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onBack) { Text("Back") }
+                Text("Income/Expenses", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(0.dp))
+            }
+
+            Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
+                Canvas(Modifier.fillMaxSize().padding(16.dp)) {
+                    val x0 = 40f
+                    val bottom = size.height - 32f
+                    val right = size.width - 8f
+                    val top = 8f
+
+                    drawLine(Color.Gray, Offset(x0, bottom), Offset(right, bottom), strokeWidth = 2f)
+                    drawLine(Color.Gray, Offset(x0, bottom), Offset(x0, top), strokeWidth = 2f)
+
+                    val all = (incomes + expenses)
+                    val maxY = (all.maxOrNull() ?: 1.0).coerceAtLeast(1.0)
+                    val niceMax = (ceil(maxY / 100.0) * 100.0).toFloat().coerceAtLeast(100f)
+
+                    val n = labels.size.coerceAtLeast(1)
+                    val dx = if (n == 1) 0f else (right - x0) / (n - 1)
+                    val xs = (0 until n).map { i -> x0 + i * dx }
+                    fun mapY(v: Double): Float = bottom - ((v.toFloat() / niceMax) * (bottom - top))
+
+                    val incomePath = Path()
+                    val expensePath = Path()
+                    labels.forEachIndexed { i, _ ->
+                        val x = xs[i]
+                        val yi = mapY(incomes.getOrElse(i) { 0.0 })
+                        val ye = mapY(expenses.getOrElse(i) { 0.0 })
+                        if (i == 0) {
+                            incomePath.moveTo(x, yi)
+                            expensePath.moveTo(x, ye)
+                        } else {
+                            incomePath.lineTo(x, yi)
+                            expensePath.lineTo(x, ye)
+                        }
+                    }
+
+                    drawPath(incomePath, color = Color(0xFF1E88E5), style = Stroke(width = 4f, cap = StrokeCap.Round))
+                    drawPath(expensePath, color = Color(0xFFE53935), style = Stroke(width = 4f, cap = StrokeCap.Round))
+                }
+            }
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                labels.forEach { Text(it) }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Canvas(Modifier.height(14.dp).fillMaxWidth(0f)) { drawRect(Color(0xFF1E88E5)) }
+                    Spacer(Modifier.height(0.dp)); Text("Income")
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Canvas(Modifier.height(14.dp).fillMaxWidth(0f)) { drawRect(Color(0xFFE53935)) }
+                    Spacer(Modifier.height(0.dp)); Text("Expenses")
+                }
+            }
+        }
+    }
 }

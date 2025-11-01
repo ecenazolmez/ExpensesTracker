@@ -1,11 +1,12 @@
-// Models.kt
+
 package com.example.expensestracker.model
 
 data class ExpenseSheet(
     val id: Long,
     val month: Int,
     val year: Int,
-    var income: Double = 0.0
+    var income: Double = 0.0,
+    var totalExpense: Double = 0.0
 )
 
 data class Expense(

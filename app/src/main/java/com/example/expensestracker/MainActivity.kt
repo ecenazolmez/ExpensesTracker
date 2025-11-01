@@ -1,22 +1,19 @@
-// MainActivity.kt
+
 package com.example.expensestracker
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import com.example.expensestracker.model.ExpenseSheet
 import com.example.expensestracker.ui.theme.AddSheetDialog
+import com.example.expensestracker.ui.theme.GraphScreen
 import com.example.expensestracker.ui.theme.SheetDetails
 import com.example.expensestracker.ui.theme.SheetList
 
-enum class Screen { Sheets, Details }
+enum class Screen { Sheets, Details, Graph }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,12 +34,13 @@ fun ExpenseApp() {
             sheets = sheets,
             onSheetClick = { s -> selected = s; screen = Screen.Details },
             onAddNewSheet = { showAddSheet = true },
-            onOpenGraph = { }
+            onOpenGraph = { screen = Screen.Graph }
         )
         Screen.Details -> {
             val s = selected ?: return
             SheetDetails(sheet = s, onBack = { screen = Screen.Sheets })
         }
+        Screen.Graph -> GraphScreen(sheets = sheets, onBack = { screen = Screen.Sheets })
     }
 
     if (showAddSheet) {
