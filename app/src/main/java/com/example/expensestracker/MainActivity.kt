@@ -11,10 +11,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.example.expensestracker.model.Expense
 import com.example.expensestracker.model.ExpenseSheet
-import com.example.expensestracker.ui.theme.AddSheetDialog
-import com.example.expensestracker.ui.theme.GraphScreen
-import com.example.expensestracker.ui.theme.SheetDetails
-import com.example.expensestracker.ui.theme.SheetList
 
 enum class Screen { Sheets, Details, Graph }
 
@@ -72,3 +68,4 @@ fun ExpenseApp() {
         )
     }
 }
+

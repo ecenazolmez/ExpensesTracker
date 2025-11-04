@@ -1,5 +1,5 @@
-// HomeScreen.kt
-package com.example.expensestracker.ui.theme
+// SharedComposable.kt
+package com.example.expensestracker
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
