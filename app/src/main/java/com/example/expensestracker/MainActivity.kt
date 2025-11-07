@@ -46,6 +46,8 @@ fun ExpenseApp() {
     LaunchedEffect(Unit) {
         sheets.clear()
         sheets.addAll(db.getSheets())
+        // Silme vb. sonrası seçili kırık kalmasın
+        selected = selected?.let { sel -> sheets.find { it.id == sel.id } }
     }
 
     // --- Seçili sheet değişince giderleri DB'den yükle ---
@@ -66,7 +68,24 @@ fun ExpenseApp() {
                 screen = Screen.Details
             },
             onAddNewSheet = { showAddSheet = true },
-            onOpenGraph = { screen = Screen.Graph }
+            onOpenGraph = { screen = Screen.Graph },
+            onEditSheet = { sheetId, newMonth, newYear ->
+                db.updateSheetMonthYear(sheetId, newMonth, newYear)
+                val idx = sheets.indexOfFirst { it.id == sheetId }
+                if (idx >= 0) {
+                    val old = sheets[idx]
+                    sheets[idx] = old.copy(month = newMonth, year = newYear)
+                }
+            },
+            onDeleteSheet = { sheetId ->
+                db.deleteSheet(sheetId)
+                sheets.removeAll { it.id == sheetId }
+                expensesMap.remove(sheetId)
+                if (selected?.id == sheetId) {
+                    selected = null
+                    screen = Screen.Sheets
+                }
+            }
         )
 
         Screen.Details -> {
@@ -75,20 +94,19 @@ fun ExpenseApp() {
                 sheet = s,
                 expenses = expensesOf(s.id),
                 onBack = { screen = Screen.Sheets },
-                // Aşağıdaki 4 callback'i SharedComposables.kt'deki SheetDetails imzanla eşleştir.
                 onUpdateIncome = { income ->
                     s.income = income
                     db.updateSheetIncome(s.id, income)
                 },
-                onAddExpense = { title, amount ->
-                    val newId = db.insertExpense(s.id, title, amount)
-                    expensesOf(s.id).add(Expense(newId, s.id, title, amount))
+                onAddExpense = { title, amount, date ->
+                    val newId = db.insertExpense(s.id, title, amount, date)
+                    expensesOf(s.id).add(Expense(newId, s.id, title, amount, date))
                 },
-                onEditExpense = { id, title, amount ->
-                    db.updateExpense(id, title, amount)
+                onEditExpense = { id, title, amount, date ->
+                    db.updateExpense(id, title, amount, date)
                     val list = expensesOf(s.id)
                     val idx = list.indexOfFirst { it.id == id }
-                    if (idx >= 0) list[idx] = list[idx].copy(title = title, amount = amount)
+                    if (idx >= 0) list[idx] = list[idx].copy(title = title, amount = amount, date = date)
                 },
                 onDeleteExpense = { id ->
                     db.deleteExpense(id)
@@ -104,7 +122,7 @@ fun ExpenseApp() {
         )
     }
 
-
+    // --- Yeni sheet oluşturma dialogu ---
     if (showAddSheet) {
         AddSheetDialog(
             onCancel = { showAddSheet = false },
