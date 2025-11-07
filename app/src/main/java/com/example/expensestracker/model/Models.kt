@@ -13,7 +13,7 @@ data class Expense(
     val sheetId: Long,
     val title: String,
     val amount: Double,
-    val date: String // ISO: "yyyy-MM-dd"
+    val date: String
 )
 
 fun monthName(m: Int): String {

@@ -25,11 +25,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun ExpenseApp() {
-    // --- DB ---
+
     val context = LocalContext.current
     val db = remember { ExpensesDb(context) }
 
-    // --- UI State ---
+
     val sheets = remember { mutableStateListOf<ExpenseSheet>() }
     val expensesMap = remember { mutableStateMapOf<Long, SnapshotStateList<Expense>>() }
 
@@ -42,13 +42,15 @@ fun ExpenseApp() {
     var selected by remember { mutableStateOf<ExpenseSheet?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
 
-    // --- Açılışta tüm sheet'leri DB'den yükle ---
+
     LaunchedEffect(Unit) {
         sheets.clear()
         sheets.addAll(db.getSheets())
+        // Silme vb. sonrası seçili kırık kalmasın
+        selected = selected?.let { sel -> sheets.find { it.id == sel.id } }
     }
 
-    // --- Seçili sheet değişince giderleri DB'den yükle ---
+
     LaunchedEffect(selected?.id) {
         val s = selected ?: return@LaunchedEffect
         expensesOf(s.id).apply {
@@ -57,7 +59,7 @@ fun ExpenseApp() {
         }
     }
 
-    // --- Ekranlar ---
+
     when (screen) {
         Screen.Sheets -> SheetList(
             sheets = sheets,
@@ -66,7 +68,24 @@ fun ExpenseApp() {
                 screen = Screen.Details
             },
             onAddNewSheet = { showAddSheet = true },
-            onOpenGraph = { screen = Screen.Graph }
+            onOpenGraph = { screen = Screen.Graph },
+            onEditSheet = { sheetId, newMonth, newYear ->
+                db.updateSheetMonthYear(sheetId, newMonth, newYear)
+                val idx = sheets.indexOfFirst { it.id == sheetId }
+                if (idx >= 0) {
+                    val old = sheets[idx]
+                    sheets[idx] = old.copy(month = newMonth, year = newYear)
+                }
+            },
+            onDeleteSheet = { sheetId ->
+                db.deleteSheet(sheetId)
+                sheets.removeAll { it.id == sheetId }
+                expensesMap.remove(sheetId)
+                if (selected?.id == sheetId) {
+                    selected = null
+                    screen = Screen.Sheets
+                }
+            }
         )
 
         Screen.Details -> {
@@ -75,20 +94,19 @@ fun ExpenseApp() {
                 sheet = s,
                 expenses = expensesOf(s.id),
                 onBack = { screen = Screen.Sheets },
-                // Aşağıdaki 4 callback'i SharedComposables.kt'deki SheetDetails imzanla eşleştir.
                 onUpdateIncome = { income ->
                     s.income = income
                     db.updateSheetIncome(s.id, income)
                 },
-                onAddExpense = { title, amount ->
-                    val newId = db.insertExpense(s.id, title, amount)
-                    expensesOf(s.id).add(Expense(newId, s.id, title, amount))
+                onAddExpense = { title, amount, date ->
+                    val newId = db.insertExpense(s.id, title, amount, date)
+                    expensesOf(s.id).add(Expense(newId, s.id, title, amount, date))
                 },
-                onEditExpense = { id, title, amount ->
-                    db.updateExpense(id, title, amount)
+                onEditExpense = { id, title, amount, date ->
+                    db.updateExpense(id, title, amount, date)
                     val list = expensesOf(s.id)
                     val idx = list.indexOfFirst { it.id == id }
-                    if (idx >= 0) list[idx] = list[idx].copy(title = title, amount = amount)
+                    if (idx >= 0) list[idx] = list[idx].copy(title = title, amount = amount, date = date)
                 },
                 onDeleteExpense = { id ->
                     db.deleteExpense(id)

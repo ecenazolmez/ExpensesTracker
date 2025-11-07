@@ -1,3 +1,4 @@
+// ExpensesDb.kt
 package com.example.expensestracker.data.db
 
 import android.content.ContentValues
@@ -7,13 +8,11 @@ import android.database.sqlite.SQLiteOpenHelper
 import com.example.expensestracker.model.Expense
 import com.example.expensestracker.model.ExpenseSheet
 
-
 class ExpensesDb(context: Context) :
-    SQLiteOpenHelper(context, "expenses.db", null, 1) {
+    SQLiteOpenHelper(context, "expenses.db", null, 2) { // v2: date sütunu
 
     override fun onConfigure(db: SQLiteDatabase) {
         super.onConfigure(db)
-        // Foreign key kısıtlarını etkinleştir
         db.setForeignKeyConstraintsEnabled(true)
     }
 
@@ -28,7 +27,6 @@ class ExpensesDb(context: Context) :
             )
             """.trimIndent()
         )
-
         db.execSQL(
             """
             CREATE TABLE expenses (
@@ -36,21 +34,24 @@ class ExpensesDb(context: Context) :
                 sheetId INTEGER NOT NULL,
                 title   TEXT    NOT NULL,
                 amount  REAL    NOT NULL,
+                date    TEXT    NOT NULL DEFAULT (date('now')),
                 FOREIGN KEY(sheetId) REFERENCES sheets(id) ON DELETE CASCADE
             )
             """.trimIndent()
         )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_expenses_sheetId ON expenses(sheetId)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Şimdilik basitçe tabloyu düşürüp yeniden oluşturuyoruz
-        db.execSQL("DROP TABLE IF EXISTS expenses")
-        db.execSQL("DROP TABLE IF EXISTS sheets")
-        onCreate(db)
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE expenses ADD COLUMN date TEXT NOT NULL DEFAULT (date('now'))")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_expenses_sheetId ON expenses(sheetId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)")
+        }
     }
 
-    // ---------------- Sheets ----
-
+    // ------ Sheets ------
     fun insertSheet(month: Int, year: Int, income: Double = 0.0): Long {
         val cv = ContentValues().apply {
             put("month", month)
@@ -85,13 +86,25 @@ class ExpensesDb(context: Context) :
         writableDatabase.update("sheets", cv, "id=?", arrayOf(id.toString()))
     }
 
-    // ---------------- Expenses
+    fun updateSheetMonthYear(id: Long, month: Int, year: Int) {
+        val cv = ContentValues().apply {
+            put("month", month)
+            put("year", year)
+        }
+        writableDatabase.update("sheets", cv, "id=?", arrayOf(id.toString()))
+    }
 
-    fun insertExpense(sheetId: Long, title: String, amount: Double): Long {
+    fun deleteSheet(id: Long) {
+        writableDatabase.delete("sheets", "id=?", arrayOf(id.toString()))
+    }
+
+    // ------ Expenses ------
+    fun insertExpense(sheetId: Long, title: String, amount: Double, date: String = today()): Long {
         val cv = ContentValues().apply {
             put("sheetId", sheetId)
             put("title", title)
             put("amount", amount)
+            put("date", date)
         }
         return writableDatabase.insert("expenses", null, cv)
     }
@@ -100,28 +113,30 @@ class ExpensesDb(context: Context) :
         val out = mutableListOf<Expense>()
         readableDatabase.query(
             "expenses",
-            arrayOf("id", "sheetId", "title", "amount"),
+            arrayOf("id", "sheetId", "title", "amount", "date"),
             "sheetId=?",
             arrayOf(sheetId.toString()),
             null, null,
-            "id ASC"
+            "date ASC, id ASC"
         ).use { c ->
             while (c.moveToNext()) {
                 out += Expense(
                     id = c.getLong(0),
                     sheetId = c.getLong(1),
                     title = c.getString(2),
-                    amount = c.getDouble(3)
+                    amount = c.getDouble(3),
+                    date = c.getString(4)
                 )
             }
         }
         return out
     }
 
-    fun updateExpense(id: Long, title: String, amount: Double) {
+    fun updateExpense(id: Long, title: String, amount: Double, date: String) {
         val cv = ContentValues().apply {
             put("title", title)
             put("amount", amount)
+            put("date", date)
         }
         writableDatabase.update("expenses", cv, "id=?", arrayOf(id.toString()))
     }
@@ -138,4 +153,8 @@ class ExpensesDb(context: Context) :
             return if (c.moveToFirst()) c.getDouble(0) else 0.0
         }
     }
+
+    private fun today(): String =
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+            .format(java.util.Date())
 }
