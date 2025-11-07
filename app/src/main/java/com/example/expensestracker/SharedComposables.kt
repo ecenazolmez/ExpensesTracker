@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -34,8 +35,13 @@ fun SheetList(
     onSheetClick: (ExpenseSheet) -> Unit,
     onAddNewSheet: () -> Unit,
     onOpenGraph: () -> Unit,
+    onEditSheet: (sheetId: Long, newMonth: Int, newYear: Int) -> Unit,
+    onDeleteSheet: (sheetId: Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var editTarget by remember { mutableStateOf<ExpenseSheet?>(null) }
+    var deleteTarget by remember { mutableStateOf<ExpenseSheet?>(null) }
+
     Scaffold(
         floatingActionButton = { FloatingActionButton(onClick = onAddNewSheet) { Text("+") } }
     ) { pad ->
@@ -64,18 +70,55 @@ fun SheetList(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(sheets, key = { it.id }) { s ->
+                        var menuOpen by remember { mutableStateOf(false) }
+
                         ElevatedCard(
                             Modifier
                                 .fillMaxWidth()
                                 .clickable { onSheetClick(s) }
                         ) {
-                            Column(Modifier.padding(16.dp)) {
-                                Text(
-                                    "${monthName(s.month)} ${s.year}",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text("Tap to open", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        "${monthName(s.month)} ${s.year}",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        "Tap to open",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Box {
+                                    IconButton(onClick = { menuOpen = true }) {
+                                        Text("⋮") // ikon yerine metin
+                                    }
+                                    DropdownMenu(
+                                        expanded = menuOpen,
+                                        onDismissRequest = { menuOpen = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Edit Month/Year") },
+                                            onClick = {
+                                                menuOpen = false
+                                                editTarget = s
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Delete Sheet") },
+                                            onClick = {
+                                                menuOpen = false
+                                                deleteTarget = s
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -83,6 +126,76 @@ fun SheetList(
             }
         }
     }
+
+    if (editTarget != null) {
+        EditSheetDialog(
+            initial = editTarget!!,
+            onCancel = { editTarget = null },
+            onConfirm = { month, year ->
+                onEditSheet(editTarget!!.id, month, year)
+                editTarget = null
+            }
+        )
+    }
+
+    if (deleteTarget != null) {
+        ConfirmDeleteSheetDialog(
+            sheet = deleteTarget!!,
+            onCancel = { deleteTarget = null },
+            onConfirm = {
+                onDeleteSheet(deleteTarget!!.id)
+                deleteTarget = null
+            }
+        )
+    }
+}
+
+@Composable
+fun EditSheetDialog(
+    initial: ExpenseSheet,
+    onCancel: () -> Unit,
+    onConfirm: (month: Int, year: Int) -> Unit
+) {
+    var month by remember { mutableStateOf(initial.month.toString()) }
+    var year by remember { mutableStateOf(initial.year.toString()) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Edit Month/Year") },
+        text = {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = month, onValueChange = { month = it }, label = { Text("Month (1–12)") }, singleLine = true)
+                OutlinedTextField(value = year,  onValueChange = { year  = it }, label = { Text("Year") }, singleLine = true)
+                if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val m = month.toIntOrNull()
+                val y = year.toIntOrNull()
+                if (m == null || m !in 1..12) { error = "Enter month 1–12"; return@TextButton }
+                if (y == null || y < 1900)    { error = "Enter valid year"; return@TextButton }
+                onConfirm(m, y)
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onCancel) { Text("Cancel") } }
+    )
+}
+
+@Composable
+fun ConfirmDeleteSheetDialog(
+    sheet: ExpenseSheet,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Delete Sheet") },
+        text = { Text("This will delete all expenses for ${monthName(sheet.month)} ${sheet.year}. This action cannot be undone.") },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } }
+    )
 }
 
 @Composable
@@ -91,7 +204,7 @@ fun AddSheetDialog(
     onConfirm: (month: Int, year: Int) -> Unit
 ) {
     val cal = remember { Calendar.getInstance() }
-    var month by remember { mutableStateOf((cal.get(Calendar.MONTH) + 1).toString()) } // 1..12
+    var month by remember { mutableStateOf((cal.get(Calendar.MONTH) + 1).toString()) }
     var year by remember { mutableStateOf(cal.get(Calendar.YEAR).toString()) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -124,8 +237,8 @@ fun SheetDetails(
     expenses: SnapshotStateList<Expense>,
     onBack: () -> Unit,
     onUpdateIncome: (Double) -> Unit,
-    onAddExpense: (String, Double) -> Unit,
-    onEditExpense: (Long, String, Double) -> Unit,
+    onAddExpense: (String, Double, String) -> Unit,
+    onEditExpense: (Long, String, Double, String) -> Unit,
     onDeleteExpense: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -160,16 +273,22 @@ fun SheetDetails(
             }
 
             var incomeText by remember(sheet.id) { mutableStateOf(if (sheet.income == 0.0) "" else sheet.income.toString()) }
+            var incomeFocused by remember { mutableStateOf(false) }
             OutlinedTextField(
                 value = incomeText,
-                onValueChange = {
-                    incomeText = it
-                    val v = it.replace(',', '.').toDoubleOrNull() ?: 0.0
-                    onUpdateIncome(v)
-                },
+                onValueChange = { incomeText = it },
                 label = { Text("Monthly Income (€)") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged {
+                        val nowFocused = it.isFocused
+                        if (incomeFocused && !nowFocused) {
+                            val v = incomeText.replace(',', '.').toDoubleOrNull() ?: 0.0
+                            onUpdateIncome(v)
+                        }
+                        incomeFocused = nowFocused
+                    }
             )
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -193,6 +312,11 @@ fun SheetDetails(
                         ) {
                             Column {
                                 Text(e.title)
+                                Text(
+                                    e.date,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                                 Text("€%.2f".format(e.amount), fontWeight = FontWeight.SemiBold)
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -210,8 +334,8 @@ fun SheetDetails(
     if (showAddExpense) {
         AddExpenseDialog(
             onCancel = { showAddExpense = false },
-            onConfirm = { title, amount ->
-                onAddExpense(title, amount)
+            onConfirm = { title, amount, date ->
+                onAddExpense(title, amount, date)
                 showAddExpense = false
             }
         )
@@ -220,8 +344,8 @@ fun SheetDetails(
         EditExpenseDialog(
             initial = editTarget!!,
             onCancel = { editTarget = null },
-            onConfirm = { id, title, amount ->
-                onEditExpense(id, title, amount)
+            onConfirm = { id, title, amount, date ->
+                onEditExpense(id, title, amount, date)
                 editTarget = null
             }
         )
@@ -231,10 +355,15 @@ fun SheetDetails(
 @Composable
 fun AddExpenseDialog(
     onCancel: () -> Unit,
-    onConfirm: (title: String, amount: Double) -> Unit
+    onConfirm: (title: String, amount: Double, date: String) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
+    var date by remember {
+        mutableStateOf(
+            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        )
+    }
     var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
@@ -244,15 +373,18 @@ fun AddExpenseDialog(
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
                 OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount (€)") }, singleLine = true)
+                OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("Date (yyyy-MM-dd)") }, singleLine = true)
                 if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 val a = amount.replace(',', '.').toDoubleOrNull()
+                val validDate = Regex("""\d{4}-\d{2}-\d{2}""").matches(date)
                 if (title.isBlank()) { error = "Title required"; return@TextButton }
                 if (a == null || a <= 0) { error = "Enter amount > 0"; return@TextButton }
-                onConfirm(title.trim(), a)
+                if (!validDate) { error = "Use yyyy-MM-dd"; return@TextButton }
+                onConfirm(title.trim(), a, date)
             }) { Text("Add") }
         },
         dismissButton = { TextButton(onCancel) { Text("Cancel") } }
@@ -263,10 +395,11 @@ fun AddExpenseDialog(
 fun EditExpenseDialog(
     initial: Expense,
     onCancel: () -> Unit,
-    onConfirm: (id: Long, title: String, amount: Double) -> Unit
+    onConfirm: (id: Long, title: String, amount: Double, date: String) -> Unit
 ) {
     var title by remember { mutableStateOf(initial.title) }
     var amount by remember { mutableStateOf(initial.amount.toString()) }
+    var date by remember { mutableStateOf(initial.date) }
     var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
@@ -276,15 +409,18 @@ fun EditExpenseDialog(
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
                 OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount (€)") }, singleLine = true)
+                OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("Date (yyyy-MM-dd)") }, singleLine = true)
                 if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 val a = amount.replace(',', '.').toDoubleOrNull()
+                val validDate = Regex("""\d{4}-\d{2}-\d{2}""").matches(date)
                 if (title.isBlank()) { error = "Title required"; return@TextButton }
                 if (a == null || a <= 0) { error = "Enter amount > 0"; return@TextButton }
-                onConfirm(initial.id, title.trim(), a)
+                if (!validDate) { error = "Use yyyy-MM-dd"; return@TextButton }
+                onConfirm(initial.id, title.trim(), a, date)
             }) { Text("Save") }
         },
         dismissButton = { TextButton(onCancel) { Text("Cancel") } }
@@ -363,6 +499,10 @@ fun GraphScreen(
                     val dx = if (n == 1) 0f else (right - x0) / (n - 1)
                     val xs = (0 until n).map { i -> x0 + i * dx }
                     fun mapY(v: Double): Float = bottom - ((v.toFloat() / niceMax) * (bottom - top))
+
+                    // y-min/max yardımcı çizgiler
+                    drawLine(Color.LightGray, Offset(x0, mapY(0.0)), Offset(right, mapY(0.0)), strokeWidth = 1f)
+                    drawLine(Color.LightGray, Offset(x0, mapY(niceMax.toDouble())), Offset(right, mapY(niceMax.toDouble())), strokeWidth = 1f)
 
                     val incomePath = Path()
                     val expensePath = Path()
