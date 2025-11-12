@@ -122,7 +122,7 @@ fun ExpenseApp() {
         )
     }
 
-
+    // --- Yeni sheet oluşturma dialogu ---
     if (showAddSheet) {
         AddSheetDialog(
             onCancel = { showAddSheet = false },
